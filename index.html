@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhishGuard — ตรวจจับอีเมล/ลิงก์ฟิชชิง</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg1:#070b16; --bg2:#0f172a; --card:#131c30; --card2:#182342;
+      --border:#26324b; --text:#e6eef8; --muted:#8b9bb4;
+      --cyan:#22d3ee; --blue:#3b82f6; --green:#22c55e; --amber:#f59e0b; --red:#ef4444;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; color:var(--text); font-family:'Sarabun','Segoe UI',sans-serif;
+      background:radial-gradient(1100px 560px at 50% -8%, #17223e 0%, var(--bg2) 46%, var(--bg1) 100%);
+      min-height:100vh; padding:34px 16px;
+    }
+    .wrap{ max-width:760px; margin:0 auto; }
+    .brand{ display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+    .brand .logo{ font-size:34px; filter:drop-shadow(0 0 12px rgba(34,211,238,.55)); }
+    .brand h1{
+      margin:0; font-size:30px; font-weight:800; letter-spacing:.4px;
+      background:linear-gradient(90deg,#e6eef8,#22d3ee); -webkit-background-clip:text; background-clip:text; color:transparent;
+    }
+    .badge{
+      font-size:11px; font-weight:700; color:var(--cyan); vertical-align:middle;
+      border:1px solid rgba(34,211,238,.35); background:rgba(34,211,238,.08);
+      padding:3px 10px; border-radius:999px; margin-left:6px;
+    }
+    .sub{ color:var(--muted); margin:8px 0 20px; font-size:14px; line-height:1.6; }
+    .card{
+      background:linear-gradient(180deg,var(--card),var(--card2));
+      border:1px solid var(--border); border-radius:16px; padding:20px;
+      box-shadow:0 12px 34px rgba(0,0,0,.38);
+    }
+    .label{ display:block; font-size:13px; color:var(--muted); margin-bottom:10px; }
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; align-items:center; }
+    .chip{
+      background:rgba(255,255,255,.04); color:#cbd5e1; font-size:12.5px; font-weight:600;
+      padding:7px 12px; border:1px solid var(--border); border-radius:999px; cursor:pointer; transition:.15s;
+    }
+    .chip:hover{ border-color:var(--cyan); color:#fff; transform:translateY(-1px); }
+    .qr-label{
+      display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#cbd5e1;
+      padding:7px 12px; border:1px dashed var(--border); border-radius:999px; cursor:pointer; transition:.15s;
+    }
+    .qr-label:hover{ border-color:var(--cyan); color:#fff; }
+    #qrInput{ display:none; }
+    textarea{
+      width:100%; height:130px; padding:14px; border-radius:12px; border:1px solid var(--border);
+      background:#0c1424; color:var(--text); font-size:15px; font-family:inherit; resize:vertical; outline:none; transition:.15s;
+    }
+    textarea:focus{ border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.16); }
+    .actions{ display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+    .checkBtn{
+      padding:12px 22px; border:none; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; color:#fff;
+      background:linear-gradient(90deg,#2563eb,#22d3ee); box-shadow:0 6px 18px rgba(34,211,238,.25); transition:.15s;
+    }
+    .checkBtn:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+    .btn-ghost{ background:transparent; color:#9fb0c9; border:1px solid var(--border); box-shadow:none; }
+    .btn-ghost:hover{ color:#fff; border-color:#3a4a66; }
+    #saveStatus{ font-size:12px; color:var(--muted); }
+    .result{
+      margin-top:18px; border-radius:16px; padding:20px; display:none;
+      border:1px solid var(--border); background:var(--card);
+    }
+    .result.show{ display:block; animation:fade .3s ease; }
+    @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+    .result-head{ display:flex; align-items:center; gap:16px; }
+    .score{ font-size:46px; font-weight:800; line-height:1; }
+    .score-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .level{ font-size:15px; font-weight:800; padding:6px 16px; border-radius:999px; }
+    .bar{ height:10px; border-radius:999px; background:#0c1424; margin:16px 0 8px; overflow:hidden; border:1px solid var(--border); }
+    .bar>div{ height:100%; border-radius:999px; transition:width .6s cubic-bezier(.2,.8,.2,1); }
+    #countText{ font-size:12.5px; color:var(--muted); }
+    .signals{ margin-top:10px; }
+    .signals strong{ font-size:13px; color:var(--muted); font-weight:600; }
+    .signals ul{ list-style:none; padding:0; margin:8px 0 0; }
+    .signals li{
+      background:rgba(255,255,255,.03); border:1px solid var(--border); border-left:3px solid var(--blue);
+      padding:8px 12px; border-radius:8px; margin:6px 0; font-size:13.5px; line-height:1.45;
+    }
+    .green{ border-color:rgba(34,197,94,.45); }
+    .green .score{ color:var(--green); }  .green .level{ background:rgba(34,197,94,.15); color:#4ade80; }
+    .orange{ border-color:rgba(245,158,11,.45); }
+    .orange .score{ color:var(--amber); } .orange .level{ background:rgba(245,158,11,.15); color:#fbbf24; }
+    .red{ border-color:rgba(239,68,68,.5); box-shadow:0 0 0 1px rgba(239,68,68,.18), 0 12px 34px rgba(239,68,68,.1); }
+    .red .score{ color:var(--red); }    .red .level{ background:rgba(239,68,68,.15); color:#f87171; }
+    .history{ margin-top:24px; }
+    .history h2{ font-size:16px; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
+    table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+    th,td{ padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); }
+    th{ background:#101a2e; color:var(--muted); font-weight:600; font-size:12px; }
+    tr:last-child td{ border-bottom:none; }
+    .muted{ color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <h1>PhishGuard</h1>
+    </div>
+    <div class="sub">
+      เครื่องมือตรวจจับอีเมล/ลิงก์ฟิชชิงด้วยโมเดล Machine Learning<span class="badge">AI-powered</span><br>
+      วางข้อความหรือลิงก์ที่สงสัย ระบบจะประเมินความเสี่ยงและอธิบายสัญญาณอันตราย
+    </div>
+
+    <div class="card">
+      <span class="label">เริ่มด้วยตัวอย่าง หรือสแกน QR ที่สงสัย</span>
+      <div class="chips">
+        <span class="chip" onclick="fillExample('phish')">😈 ฟิชชิง</span>
+        <span class="chip" onclick="fillExample('typo')">🎭 โดเมนเลียนแบบ</span>
+        <span class="chip" onclick="fillExample('safe')">✅ ปกติ</span>
+        <label class="qr-label" for="qrInput">📷 สแกน QR</label>
+        <input type="file" id="qrInput" accept="image/*" onchange="scanQR(event)">
+      </div>
+
+      <textarea id="input" placeholder="วางข้อความอีเมลหรือลิงก์ที่นี่..."></textarea>
+      <div class="actions">
+        <button class="checkBtn" onclick="run()">🔍 ตรวจสอบ</button>
+        <button class="checkBtn btn-ghost" onclick="clearInput()">🗑️ ล้าง</button>
+        <span id="saveStatus"></span>
+      </div>
+    </div>
+
+    <div id="result" class="result">
+      <div class="result-head">
+        <div>
+          <span class="score" id="scoreText">0</span>
+          <div class="score-sub">คะแนนความเสี่ยง / 100</div>
+        </div>
+        <span class="level" id="levelText"></span>
+      </div>
+      <div class="bar"><div id="barFill" style="width:0%"></div></div>
+      <div id="countText"></div>
+      <div class="signals">
+        <strong>สัญญาณที่ตรวจพบ</strong>
+        <ul id="signalList"></ul>
+      </div>
+    </div>
+
+    <div class="history card">
+      <h2>📋 ประวัติการตรวจสอบล่าสุด</h2>
+      <div class="muted" id="histStatus">กำลังโหลด...</div>
+      <table id="histTable" style="display:none">
+        <thead>
+          <tr><th>เวลา</th><th>คะแนน</th><th>ระดับ</th><th>สัญญาณ</th></tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // ================= ตั้งค่า =================
+    const API_URL = "https://script.google.com/macros/s/AKfycbzAMYKfUA3U0hFfWwTs7Sc9miipSWWAFUlQlHShi4_wW2PRGdamre21jXGr9wD3E3EadA/exec";
+
+    // โมเดลที่เทรนจากข้อมูล (จากไฟล์ train_model.js)
+    const MODEL = {
+      // [lureWords, http, ipAddr, atSign, shortener, badTLD, deepSubdomain, longDomain, typosquat, blocklist]
+      weights: [2.047, 2.030, 0.251, 0.147, 1.007, 1.691, -0.010, 0.000, 2.952, 0.393],
+      bias: -2.011
+    };
+
+    // รายการอ้างอิงตั้งต้น (fallback) — จะถูกรวมกับรายการจาก Google Sheets ตอนโหลด
+    let BRANDS = ['paypal.com','google.com','facebook.com','apple.com','microsoft.com',
+      'amazon.com','kbank.com','scb.co.th','bangkokbank.com','krungsri.com','line.me',
+      'netflix.com','instagram.com','kasikornbank.com'];
+    let BLOCKLIST = ['secure-bank-verify.xyz','free-money.work','account-portal-review.com',
+      'update-password-now.click','kbank-verify.secure-login.ml'];
+
+    // ดึงรายชื่อ Blocklist/Brands ล่าสุดจาก Google Sheets (แก้ไขได้สดโดยไม่ต้องแตะโค้ด)
+    function loadConfig(){
+      if (API_URL.indexOf('PASTE_YOUR') === 0) return;
+      fetch(API_URL + '?mode=config')
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+          if (json.brands && json.brands.length)
+            BRANDS = Array.from(new Set(BRANDS.concat(json.brands)));
+          if (json.blocklist && json.blocklist.length)
+            BLOCKLIST = Array.from(new Set(BLOCKLIST.concat(json.blocklist)));
+          console.log('โหลด config แล้ว: brands=' + BRANDS.length + ', blocklist=' + BLOCKLIST.length);
+        })
+        .catch(function(e){ console.log('config error', e); });
+    }
+
+    // ================= อัลกอริทึมตรวจโดเมนเลียนแบบ =================
+    function levenshtein(a, b) {
+      const m = a.length, n = b.length;
+      const dp = Array.from({length: m+1}, function(_, i){ return [i].concat(new Array(n).fill(0)); });
+      for (let j=0;j<=n;j++) dp[0][j]=j;
+      for (let i=1;i<=m;i++)
+        for (let j=1;j<=n;j++)
+          dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + (a[i-1]===b[j-1]?0:1));
+      return dp[m][n];
+    }
+    function deleet(s){ return s.replace(/0/g,'o').replace(/1/g,'l').replace(/3/g,'e').replace(/4/g,'a').replace(/5/g,'s').replace(/@/g,'a'); }
+    function matchBrandImpersonation(host){
+      const h = host.replace(/^www\./,'');
+      // 1) ถ้าเป็นโดเมนจริงหรือ subdomain จริงของแบรนด์ = ปลอดภัย (เช่น docs.google.com)
+      for (const brand of BRANDS){
+        if (h === brand || h.endsWith('.' + brand)) return null;
+      }
+      // 2) ตรวจการแอบอ้างแบรนด์
+      for (const brand of BRANDS){
+        // (ก) Typosquat: พิมพ์คล้าย (แก้ 1-2 ตัว) หรือปลอมด้วยเลข (leet: paypa1 → paypal)
+        if (deleet(h) === brand) return { brand: brand, kind: 'typo' };
+        const d = levenshtein(h, brand);
+        if (d >= 1 && d <= 2 && Math.abs(h.length - brand.length) <= 2) return { brand: brand, kind: 'typo' };
+        // (ข) Combosquat: ชื่อแบรนด์เป็นคำในโดเมนแต่ไม่ใช่โดเมนจริง (เช่น shopee-verify.co)
+        const core = brand.split('.')[0];
+        if (core.length >= 5) {
+          const re = new RegExp('(^|[.-])' + core + '([.-]|$)');
+          if (re.test(h)) return { brand: brand, kind: 'combo' };
+        }
+      }
+      return null;
+    }
+
+    // ================= สกัด features + สัญญาณ =================
+    function extractFeatures(text){
+      const lower = text.toLowerCase();
+      const lureWords = ['ด่วน','ภายใน 24','ระงับ','ถูกระงับ','อายัด','ยืนยันตัวตน','ยืนยันบัญชี',
+        'ยืนยันข้อมูล','รหัสผ่าน','otp','เลขบัตร','บัตรเครดิต','ถูกรางวัล','รับรางวัล','โชคดี',
+        'คลิกที่นี่','กดลิงก์','verify','urgent','suspend','locked','click here','password',
+        'winner','congratulations','immediately'];
+      let lureCount = 0;
+      lureWords.forEach(function(w){ if (lower.indexOf(w) !== -1) lureCount++; });
+
+      const urls = text.match(/https?:\/\/[^\s)]+/gi) || [];
+      let hasHttp=0, hasIP=0, hasAt=0, isShort=0, badTld=0, deepSub=0, longDom=0, typo=0, blocked=0, homo=0;
+      const signals = [];
+      const shorteners = ['bit.ly','tinyurl.com','goo.gl','t.co','ow.ly','is.gd','cutt.ly','rb.gy'];
+      const badTlds = ['.xyz','.top','.tk','.zip','.club','.click','.work','.gq','.ml','.cf'];
+
+      urls.forEach(function(url){
+        url = url.replace(/[.,;:!?)\]"'»】]+$/,'');   // ตัดเครื่องหมายวรรคตอนท้ายลิงก์
+        let host=''; try { host = new URL(url).hostname; } catch(e){ host = url.slice(0,60); }
+        if (url.toLowerCase().indexOf('http://')===0){ hasHttp=1; signals.push('ลิงก์ใช้ http (ไม่เข้ารหัส): '+host); }
+        if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)){ hasIP=1; signals.push('ใช้เลข IP แทนชื่อโดเมน: '+host); }
+        if (url.indexOf('@')!==-1){ hasAt=1; signals.push('ลิงก์มีเครื่องหมาย @ (พรางปลายทางจริง)'); }
+        if (shorteners.some(function(s){ return host===s || host.endsWith('.'+s); })){ isShort=1; signals.push('ใช้บริการย่อลิงก์: '+host); }
+        if (badTlds.some(function(t){ return host.endsWith(t); })){ badTld=1; signals.push('นามสกุลโดเมนที่พบบ่อยในเว็บหลอกลวง: '+host); }
+        if ((host.match(/\./g)||[]).length >= 3){ deepSub=1; }
+        if (host.length > 30){ longDom=1; }
+        const imp = matchBrandImpersonation(host);
+        if (imp){
+          typo=1;
+          if (imp.kind === 'typo') signals.push('⚠️ โดเมนพิมพ์เลียนแบบแบรนด์ "'+imp.brand+'" → '+host);
+          else signals.push('⚠️ โดเมนแอบอ้างชื่อแบรนด์ "'+imp.brand+'" → '+host);
+        }
+        if (BLOCKLIST.some(function(b){ return host===b || host.endsWith('.'+b); })){ blocked=1; signals.push('🚫 โดเมนอยู่ในบัญชีดำ (blocklist): '+host); }
+        // Homograph: ผสมตัวอักษรหลายภาษา "ในเลเบลเดียว" = โจมตีชัดเจน (เช่น раypal ผสมซีริลลิก+ละติน)
+        const mixed = host.split('.').some(function(label){ return /[a-z]/i.test(label) && /[^\x00-\x7F]/.test(label); });
+        if (mixed){ homo=1; signals.push('🔡 โดเมนผสมตัวอักษรหลายภาษาในชื่อเดียว (homograph) — ปลอมหน้าตาแบรนด์: '+host); }
+        else if (/xn--/i.test(host)){ signals.push('🔡 โดเมนเข้ารหัส punycode (xn--) — อาจเป็นภาษาต่างประเทศ ควรตรวจสอบเพิ่ม: '+host); }
+      });
+      if (lureCount>0) signals.push('พบคำล่อลวง/เร่งด่วน '+lureCount+' คำ');
+
+      const features = [Math.min(lureCount/4,1), hasHttp, hasIP, hasAt, isShort, badTld, deepSub, longDom, typo, blocked];
+      return { features: features, signals: signals, blocked: blocked===1, homograph: homo===1 };
+    }
+
+    // ================= โมเดลทำนายความเสี่ยง =================
+    function sigmoid(z){ return 1/(1+Math.exp(-z)); }
+    function analyze(text){
+      const ex = extractFeatures(text);
+      let z = MODEL.bias;
+      ex.features.forEach(function(x,k){ z += x * MODEL.weights[k]; });
+      let prob = sigmoid(z);
+      let score = Math.round(prob * 100);
+
+      // ความปลอดภัยเชิงลึก (hard override): สัญญาณที่ชัดเจนให้ถือว่าอันตรายเสมอ
+      if (ex.blocked) score = Math.max(score, 90);      // อยู่ในบัญชีดำ
+      if (ex.homograph) score = Math.max(score, 85);    // homograph/punycode
+
+      let level, color;
+      if (score < 30)      { level='ปลอดภัย';  color='green'; }
+      else if (score < 60) { level='น่าสงสัย'; color='orange'; }
+      else                 { level='อันตราย';  color='red'; }
+
+      const signals = ex.signals.length ? ex.signals : ['ไม่พบสัญญาณอันตรายที่ชัดเจน'];
+      return { score: score, level: level, color: color, signals: signals };
+    }
+
+    // ================= UI =================
+    const EXAMPLES = {
+      phish: 'เรียนลูกค้า บัญชีของท่านถูกระงับ กรุณายืนยันตัวตนภายใน 24 ชม. ที่ http://secure-bank-verify.xyz/login',
+      typo:  'Security alert: please sign in to verify your account at https://kbannk.com/login',
+      safe:  'สวัสดีครับ พรุ่งนี้ประชุมทีม 10 โมงที่ห้อง A ตามลิงก์ https://meet.google.com/abc-defg-hij นะครับ'
+    };
+    function fillExample(k){ document.getElementById('input').value = EXAMPLES[k]; }
+
+    // ล้างข้อความและซ่อนผลลัพธ์
+    function clearInput(){
+      document.getElementById('input').value = '';
+      document.getElementById('result').className = 'result';
+      document.getElementById('saveStatus').textContent = '';
+      document.getElementById('input').focus();
+    }
+
+    // ---------- สแกน QR Code (Quishing) : ถอด URL จากรูปแล้ววิเคราะห์ ----------
+    function scanQR(ev){
+      const file = ev.target.files[0];
+      if (!file) return;
+      if (typeof jsQR === 'undefined'){ alert('ไลบรารี QR ยังโหลดไม่เสร็จ ลองใหม่อีกครั้ง (ต้องต่อเน็ต)'); return; }
+      const img = new Image();
+      img.onload = function(){
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imgData.data, canvas.width, canvas.height);
+        if (code && code.data){
+          document.getElementById('input').value = code.data;
+          run();
+        } else {
+          alert('อ่าน QR ไม่สำเร็จ ลองใช้รูปที่ชัด/ตรงกว่านี้');
+        }
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = function(){ alert('เปิดรูปไม่สำเร็จ'); };
+      img.src = URL.createObjectURL(file);
+    }
+
+    // ดึงโดเมนหลัก (ลิงก์แรก) จากข้อความ เพื่อใช้เป็น "กุญแจ" นับจำนวนครั้ง
+    function primaryDomain(text){
+      const urls = text.match(/https?:\/\/[^\s)]+/gi) || [];
+      if (!urls.length) return '';
+      const clean = urls[0].replace(/[.,;:!?)\]"'»】]+$/,'');
+      try { return new URL(clean).hostname.replace(/^www\./,'').toLowerCase(); }
+      catch(e){ return ''; }
+    }
+
+    function run() {
+      const text = document.getElementById('input').value.trim();
+      if (!text) { alert('กรุณาวางข้อความหรือลิงก์ก่อนครับ'); return; }
+      const r = analyze(text);
+      document.getElementById('countText').innerText = '';
+
+      const box = document.getElementById('result');
+      box.className = 'result show ' + r.color;
+      document.getElementById('scoreText').innerText = r.score;
+      document.getElementById('levelText').innerText = r.level;
+      const barColor = r.color==='green' ? '#16a34a' : (r.color==='orange' ? '#d97706' : '#dc2626');
+      const bar = document.getElementById('barFill');
+      bar.style.width = r.score + '%'; bar.style.background = barColor;
+
+      const list = document.getElementById('signalList');
+      list.innerHTML = '';
+      r.signals.forEach(function(s){ const li=document.createElement('li'); li.innerText=s; list.appendChild(li); });
+
+      saveToSheet(text, r);
+    }
+
+    function saveToSheet(text, r) {
+      const status = document.getElementById('saveStatus');
+      if (API_URL.indexOf('PASTE_YOUR') === 0) { status.textContent = ''; return; }
+      status.textContent = '💾 กำลังบันทึกลง Google Sheets...';
+      const domain = primaryDomain(text);
+      fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          riskScore: r.score, riskLevel: r.level,
+          signals: r.signals.join('; '), inputPreview: text.substring(0, 80),
+          domain: domain
+        })
+      }).then(function(res){ return res.json(); })
+        .then(function(json){
+          status.textContent = '✅ บันทึกแล้ว';
+          if (domain && json && json.count) {
+            document.getElementById('countText').innerText =
+              '🔁 โดเมน "' + domain + '" ถูกตรวจสอบมาแล้ว ' + json.count + ' ครั้ง';
+          }
+          setTimeout(loadHistory, 600);
+        })
+        .catch(function(e){
+          // เปิดผ่าน file:// จะเขียนลง Sheet ได้ แต่อ่านคำตอบกลับไม่ได้ (ข้อจำกัด CORS) — ไม่ใช่ error จริง
+          if (location.protocol === 'file:')
+            status.textContent = '✅ ส่งข้อมูลแล้ว (เปิดผ่านไฟล์ในเครื่อง เลยอ่านผลตอบกลับไม่ได้ — จะหายเมื่อโฮสต์ขึ้นเว็บจริง)';
+          else
+            status.textContent = '⚠️ บันทึกไม่สำเร็จ (แต่ผลวิเคราะห์ยังแสดงได้)';
+          setTimeout(loadHistory, 600);
+          console.log('save note:', e);
+        });
+    }
+
+    function loadHistory() {
+      const status = document.getElementById('histStatus');
+      const table  = document.getElementById('histTable');
+      if (API_URL.indexOf('PASTE_YOUR') === 0) { status.innerText='(ยังไม่ได้ใส่ Web app URL)'; return; }
+      fetch(API_URL)
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+          const rows = json.data || [];
+          if (rows.length === 0) { status.innerText = 'ยังไม่มีประวัติ'; return; }
+          status.style.display = 'none'; table.style.display = 'table';
+          const body = document.getElementById('histBody'); body.innerHTML = '';
+          rows.forEach(function(row){
+            const tr = document.createElement('tr');
+            // ใช้ textContent (ไม่ใช่ innerHTML) เพื่อกัน Stored XSS — ข้อความจะถูกแสดงเป็นตัวอักษร ไม่ถูกตีความเป็น HTML
+            [row.timestamp, row.riskScore, row.riskLevel, row.signals].forEach(function(val){
+              const td = document.createElement('td');
+              td.textContent = (val === undefined || val === null) ? '' : String(val);
+              tr.appendChild(td);
+            });
+            body.appendChild(tr);
+          });
+        })
+        .catch(function(e){ status.innerText = 'โหลดประวัติไม่สำเร็จ: ' + e; });
+    }
+
+    loadConfig();
+    loadHistory();
+  </script>
+</body>
+</html>

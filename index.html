@@ -90,6 +90,12 @@
     .orange .score{ color:var(--amber); } .orange .level{ background:rgba(245,158,11,.15); color:#fbbf24; }
     .red{ border-color:rgba(239,68,68,.5); box-shadow:0 0 0 1px rgba(239,68,68,.18), 0 12px 34px rgba(239,68,68,.1); }
     .red .score{ color:var(--red); }    .red .level{ background:rgba(239,68,68,.15); color:#f87171; }
+    .report-row{ margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .rep-btn{ font-size:12.5px; font-weight:700; padding:7px 12px; border-radius:999px; cursor:pointer;
+      border:1px solid var(--border); background:rgba(255,255,255,.04); color:#cbd5e1; transition:.15s; }
+    .rep-btn.danger:hover{ border-color:var(--red); color:#fca5a5; }
+    .rep-btn.safe:hover{ border-color:var(--green); color:#86efac; }
+    #reportStatus{ font-size:12px; color:var(--muted); }
     .history{ margin-top:24px; }
     .history h2{ font-size:16px; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
     table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
@@ -142,10 +148,16 @@
         <strong>สัญญาณที่ตรวจพบ</strong>
         <ul id="signalList"></ul>
       </div>
+      <div class="report-row">
+        <span class="muted">คิดว่าลิงก์นี้จริง ๆ แล้ว:</span>
+        <button class="rep-btn danger" onclick="reportSite('อันตราย')">🚩 รายงานว่าอันตราย</button>
+        <button class="rep-btn safe" onclick="reportSite('ปลอดภัย')">✅ รายงานว่าปลอดภัย</button>
+        <span id="reportStatus"></span>
+      </div>
     </div>
 
     <div class="history card">
-      <h2>📋 ประวัติการตรวจสอบล่าสุด</h2>
+      <h2>📋 ประวัติการตรวจสอบ (8 รายการล่าสุด)</h2>
       <div class="muted" id="histStatus">กำลังโหลด...</div>
       <table id="histTable" style="display:none">
         <thead>
@@ -173,6 +185,10 @@
       'netflix.com','instagram.com','kasikornbank.com'];
     let BLOCKLIST = ['secure-bank-verify.xyz','free-money.work','account-portal-review.com',
       'update-password-now.click','kbank-verify.secure-login.ml'];
+    // โดเมน/นามสกุลที่เชื่อถือได้ (นอกเหนือจาก BRANDS) — ใช้ตัดสิน "โดเมนแปลกหน้า"
+    let TRUSTED = ['wikipedia.org','youtube.com','github.com','zoom.us','dropbox.com','thailandpost.co.th',
+      'shopee.co.th','lazada.co.th','gmail.com','outlook.com','live.com','office.com','drive.google.com'];
+    const TRUSTED_SUFFIX = ['.go.th','.ac.th','.or.th','.gov','.edu'];
 
     // ดึงรายชื่อ Blocklist/Brands ล่าสุดจาก Google Sheets (แก้ไขได้สดโดยไม่ต้องแตะโค้ด)
     function loadConfig(){
@@ -232,8 +248,12 @@
       let lureCount = 0;
       lureWords.forEach(function(w){ if (lower.indexOf(w) !== -1) lureCount++; });
 
+      // มีบริบท "ขอให้ล็อกอิน/ยืนยันตัวตน/กรอกข้อมูล" หรือไม่
+      const credWords = ['ล็อกอิน','เข้าสู่ระบบ','ยืนยัน','กรอก','อัปเดตข้อมูล','login','log in','sign in','signin','password','รหัสผ่าน','otp','บัญชี','account','verify'];
+      const credentialContext = credWords.some(function(w){ return lower.indexOf(w.toLowerCase()) !== -1; });
+
       const urls = text.match(/https?:\/\/[^\s)]+/gi) || [];
-      let hasHttp=0, hasIP=0, hasAt=0, isShort=0, badTld=0, deepSub=0, longDom=0, typo=0, blocked=0, homo=0;
+      let hasHttp=0, hasIP=0, hasAt=0, isShort=0, badTld=0, deepSub=0, longDom=0, typo=0, blocked=0, homo=0, unknownDomain=0;
       const signals = [];
       const shorteners = ['bit.ly','tinyurl.com','goo.gl','t.co','ow.ly','is.gd','cutt.ly','rb.gy'];
       const badTlds = ['.xyz','.top','.tk','.zip','.club','.click','.work','.gq','.ml','.cf'];
@@ -260,11 +280,23 @@
         const mixed = rawHost.split('.').some(function(label){ return /[a-z]/i.test(label) && /[^\x00-\x7F]/.test(label); });
         if (mixed){ homo=1; signals.push('🔡 โดเมนผสมตัวอักษรหลายภาษาในชื่อเดียว (homograph) — ปลอมหน้าตาแบรนด์: '+rawHost); }
         else if (/xn--/i.test(host)){ signals.push('🔡 โดเมนเข้ารหัส punycode (xn--) — อาจเป็นภาษาต่างประเทศจริง หรือปลอมหน้าตาแบรนด์ ควรตรวจสอบเพิ่ม: '+host); }
+        // โดเมนแปลกหน้า: ไม่ใช่แบรนด์/เว็บที่เชื่อถือได้
+        const trusted = BRANDS.some(function(b){ return host===b || host.endsWith('.'+b); })
+                     || TRUSTED.some(function(b){ return host===b || host.endsWith('.'+b); })
+                     || TRUSTED_SUFFIX.some(function(s){ return host.endsWith(s); });
+        if (!trusted) unknownDomain = 1;
       });
       if (lureCount>0) signals.push('พบคำล่อลวง/เร่งด่วน '+lureCount+' คำ');
 
+      // กฎโดเมนแปลกหน้า: ขอให้ล็อกอิน/ยืนยัน แต่ชี้ไปโดเมนที่ไม่คุ้นเคย → ยกระดับความสงสัย
+      let unknownRisk = false;
+      if (credentialContext && unknownDomain && urls.length){
+        unknownRisk = true;
+        signals.push('⚠️ ลิงก์ขอให้ล็อกอิน/ยืนยันตัวตน แต่ชี้ไปโดเมนที่ไม่คุ้นเคย — ควรตรวจสอบให้แน่ใจก่อนกรอกข้อมูล');
+      }
+
       const features = [Math.min(lureCount/4,1), hasHttp, hasIP, hasAt, isShort, badTld, deepSub, longDom, typo, blocked];
-      return { features: features, signals: signals, blocked: blocked===1, homograph: homo===1 };
+      return { features: features, signals: signals, blocked: blocked===1, homograph: homo===1, unknownRisk: unknownRisk };
     }
 
     // ================= โมเดลทำนายความเสี่ยง =================
@@ -279,6 +311,7 @@
       // ความปลอดภัยเชิงลึก (hard override): สัญญาณที่ชัดเจนให้ถือว่าอันตรายเสมอ
       if (ex.blocked) score = Math.max(score, 90);      // อยู่ในบัญชีดำ
       if (ex.homograph) score = Math.max(score, 85);    // homograph/punycode
+      if (ex.unknownRisk) score = Math.max(score, 50);  // ขอล็อกอินไปโดเมนแปลกหน้า → น่าสงสัย
 
       let level, color;
       if (score < 30)      { level='ปลอดภัย';  color='green'; }
@@ -339,11 +372,16 @@
       catch(e){ return ''; }
     }
 
+    // เก็บผลล่าสุดไว้ใช้ตอนกดรายงาน
+    let lastResult = { domain: '', score: 0 };
+
     function run() {
       const text = document.getElementById('input').value.trim();
       if (!text) { alert('กรุณาวางข้อความหรือลิงก์ก่อนครับ'); return; }
       const r = analyze(text);
       document.getElementById('countText').innerText = '';
+      document.getElementById('reportStatus').textContent = '';
+      lastResult = { domain: primaryDomain(text), score: r.score };
 
       const box = document.getElementById('result');
       box.className = 'result show ' + r.color;
@@ -392,6 +430,24 @@
         });
     }
 
+    // ผู้ใช้กดรายงานว่าลิงก์นี้อันตราย/ปลอดภัย → ส่งไปเก็บแท็บ Reports (รอแอดมินรีวิว)
+    function reportSite(verdict){
+      const rs = document.getElementById('reportStatus');
+      if (!lastResult.domain){ rs.textContent = '(รายงานได้เฉพาะข้อความที่มีลิงก์)'; return; }
+      if (API_URL.indexOf('PASTE_YOUR') === 0){ rs.textContent = ''; return; }
+      rs.textContent = 'กำลังส่งรายงาน...';
+      fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action:'report', domain:lastResult.domain, verdict:verdict, riskScore:lastResult.score })
+      }).then(function(res){ return res.json(); })
+        .then(function(){ rs.textContent = '🙏 ขอบคุณ! ส่งรายงานว่า "'+verdict+'" แล้ว (รอแอดมินตรวจสอบ)'; })
+        .catch(function(e){
+          if (location.protocol === 'file:') rs.textContent = '🙏 ส่งรายงานแล้ว (เปิดผ่านไฟล์ในเครื่อง เลยอ่านผลตอบกลับไม่ได้)';
+          else rs.textContent = '⚠️ ส่งรายงานไม่สำเร็จ';
+          console.log('report note:', e);
+        });
+    }
+
     function loadHistory() {
       const status = document.getElementById('histStatus');
       const table  = document.getElementById('histTable');
@@ -399,7 +455,7 @@
       fetch(API_URL)
         .then(function(res){ return res.json(); })
         .then(function(json){
-          const rows = json.data || [];
+          const rows = (json.data || []).slice(0, 8);   // แสดงแค่ 8 รายการล่าสุดพอ
           if (rows.length === 0) { status.innerText = 'ยังไม่มีประวัติ'; return; }
           status.style.display = 'none'; table.style.display = 'table';
           const body = document.getElementById('histBody'); body.innerHTML = '';

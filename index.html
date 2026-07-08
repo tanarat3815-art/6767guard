@@ -255,10 +255,11 @@
           else signals.push('⚠️ โดเมนแอบอ้างชื่อแบรนด์ "'+imp.brand+'" → '+host);
         }
         if (BLOCKLIST.some(function(b){ return host===b || host.endsWith('.'+b); })){ blocked=1; signals.push('🚫 โดเมนอยู่ในบัญชีดำ (blocklist): '+host); }
-        // Homograph: ผสมตัวอักษรหลายภาษา "ในเลเบลเดียว" = โจมตีชัดเจน (เช่น раypal ผสมซีริลลิก+ละติน)
-        const mixed = host.split('.').some(function(label){ return /[a-z]/i.test(label) && /[^\x00-\x7F]/.test(label); });
-        if (mixed){ homo=1; signals.push('🔡 โดเมนผสมตัวอักษรหลายภาษาในชื่อเดียว (homograph) — ปลอมหน้าตาแบรนด์: '+host); }
-        else if (/xn--/i.test(host)){ signals.push('🔡 โดเมนเข้ารหัส punycode (xn--) — อาจเป็นภาษาต่างประเทศ ควรตรวจสอบเพิ่ม: '+host); }
+        // Homograph: ตรวจจาก "host ดิบ" ก่อนเบราว์เซอร์แปลงเป็น punycode (เพื่อเห็นตัวอักษรต่างภาษาจริง)
+        const rawHost = (url.split('://')[1] || '').split('/')[0].split('?')[0];
+        const mixed = rawHost.split('.').some(function(label){ return /[a-z]/i.test(label) && /[^\x00-\x7F]/.test(label); });
+        if (mixed){ homo=1; signals.push('🔡 โดเมนผสมตัวอักษรหลายภาษาในชื่อเดียว (homograph) — ปลอมหน้าตาแบรนด์: '+rawHost); }
+        else if (/xn--/i.test(host)){ signals.push('🔡 โดเมนเข้ารหัส punycode (xn--) — อาจเป็นภาษาต่างประเทศจริง หรือปลอมหน้าตาแบรนด์ ควรตรวจสอบเพิ่ม: '+host); }
       });
       if (lureCount>0) signals.push('พบคำล่อลวง/เร่งด่วน '+lureCount+' คำ');
 

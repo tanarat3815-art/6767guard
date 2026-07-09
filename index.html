@@ -335,6 +335,8 @@
       document.getElementById('input').value = '';
       document.getElementById('result').className = 'result';
       document.getElementById('saveStatus').textContent = '';
+      lastResult = { domain: '', score: 0 };   // รีเซ็ตผลเดิม กันกดรายงานโดเมนเก่าหลังล้าง
+      reported = false;
       document.getElementById('input').focus();
     }
 
@@ -374,6 +376,7 @@
 
     // เก็บผลล่าสุดไว้ใช้ตอนกดรายงาน
     let lastResult = { domain: '', score: 0 };
+    let reported = false;   // กันกดรายงานซ้ำสำหรับผลตรวจเดียวกัน
 
     function run() {
       const text = document.getElementById('input').value.trim();
@@ -382,6 +385,7 @@
       document.getElementById('countText').innerText = '';
       document.getElementById('reportStatus').textContent = '';
       lastResult = { domain: primaryDomain(text), score: r.score };
+      reported = false;   // ผลตรวจใหม่ → รายงานได้อีกครั้ง
 
       const box = document.getElementById('result');
       box.className = 'result show ' + r.color;
@@ -417,7 +421,7 @@
             document.getElementById('countText').innerText =
               '🔁 โดเมน "' + domain + '" ถูกตรวจสอบมาแล้ว ' + json.count + ' ครั้ง';
           }
-          setTimeout(loadHistory, 600);
+          setTimeout(loadHistory, 1500);   // เผื่อเวลา Apps Script เขียนชีตเสร็จก่อนดึงประวัติ
         })
         .catch(function(e){
           // เปิดผ่าน file:// จะเขียนลง Sheet ได้ แต่อ่านคำตอบกลับไม่ได้ (ข้อจำกัด CORS) — ไม่ใช่ error จริง
@@ -425,7 +429,7 @@
             status.textContent = '✅ ส่งข้อมูลแล้ว (เปิดผ่านไฟล์ในเครื่อง เลยอ่านผลตอบกลับไม่ได้ — จะหายเมื่อโฮสต์ขึ้นเว็บจริง)';
           else
             status.textContent = '⚠️ บันทึกไม่สำเร็จ (แต่ผลวิเคราะห์ยังแสดงได้)';
-          setTimeout(loadHistory, 600);
+          setTimeout(loadHistory, 1500);
           console.log('save note:', e);
         });
     }
@@ -433,6 +437,7 @@
     // ผู้ใช้กดรายงานว่าลิงก์นี้อันตราย/ปลอดภัย → ส่งไปเก็บแท็บ Reports (รอแอดมินรีวิว)
     function reportSite(verdict){
       const rs = document.getElementById('reportStatus');
+      if (reported){ rs.textContent = '(รายงานลิงก์นี้ไปแล้ว ขอบคุณครับ)'; return; }
       if (!lastResult.domain){ rs.textContent = '(รายงานได้เฉพาะข้อความที่มีลิงก์)'; return; }
       if (API_URL.indexOf('PASTE_YOUR') === 0){ rs.textContent = ''; return; }
       rs.textContent = 'กำลังส่งรายงาน...';
@@ -440,9 +445,9 @@
         method: 'POST',
         body: JSON.stringify({ action:'report', domain:lastResult.domain, verdict:verdict, riskScore:lastResult.score })
       }).then(function(res){ return res.json(); })
-        .then(function(){ rs.textContent = '🙏 ขอบคุณ! ส่งรายงานว่า "'+verdict+'" แล้ว (รอแอดมินตรวจสอบ)'; })
+        .then(function(){ reported = true; rs.textContent = '🙏 ขอบคุณ! ส่งรายงานว่า "'+verdict+'" แล้ว (รอแอดมินตรวจสอบ)'; })
         .catch(function(e){
-          if (location.protocol === 'file:') rs.textContent = '🙏 ส่งรายงานแล้ว (เปิดผ่านไฟล์ในเครื่อง เลยอ่านผลตอบกลับไม่ได้)';
+          if (location.protocol === 'file:') { reported = true; rs.textContent = '🙏 ส่งรายงานแล้ว (เปิดผ่านไฟล์ในเครื่อง เลยอ่านผลตอบกลับไม่ได้)'; }
           else rs.textContent = '⚠️ ส่งรายงานไม่สำเร็จ';
           console.log('report note:', e);
         });
